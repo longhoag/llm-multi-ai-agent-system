@@ -13,7 +13,7 @@ boto3 = "^1.34.0"
 python-dotenv = "^1.0.0"
 # Logging (following copilot instructions)
 loguru = "^0.7.0"
-# LangGraph framework with GPT-5-mini support (following copilot instructions)
+# LangGraph framework with GPT-4o-mini ReAct agents (following copilot instructions)
 openai = "^1.3.0"
 langgraph = "^0.2.0"
 langchain = "^0.3.0"

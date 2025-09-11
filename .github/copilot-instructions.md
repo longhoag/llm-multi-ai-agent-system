@@ -13,14 +13,14 @@ This repository implements a multi-agent LLM pipeline for stock price prediction
   - **Preprocessing Node**: Cleans, transforms, and feature-engineers data. Uses SageMaker Processing tools, AWS Glue, Pandas, Scikit-learn.
   - **Training Node**: Selects algorithms, launches SageMaker training jobs (XGBoost, PyTorch, TensorFlow), tracks metrics.
 - **State Management**: LangGraph StateGraph manages workflow state with automatic persistence and rollback capabilities.
-- **LLM Framework**: Uses **LangGraph + GPT-5-mini** for intelligent workflow routing, ReAct agent patterns, and dynamic decision-making.
+- **LLM Framework**: Uses **LangGraph + GPT-4o-mini** for intelligent workflow routing, ReAct agent patterns, and dynamic decision-making.
 
 ## LangGraph Workflow Coordination Model
 The system uses **LangGraph StateGraph** for advanced workflow orchestration:
 
 - **Graph-Based Workflows**: Declarative workflow definition using LangGraph StateGraph with nodes, edges, and conditional routing
 - **State-Driven Communication**: Agents communicate through shared state objects with automatic persistence and versioning
-- **Intelligent Routing**: GPT-5-mini powered conditional edges for dynamic workflow branching based on data quality, system load, and business logic
+- **Intelligent Routing**: GPT-4o-mini powered conditional edges for dynamic workflow branching based on data quality, system load, and business logic
 - **Built-in Orchestration**: LangGraph handles workflow execution, state management, error handling, and rollback automatically
 - **ReAct Agent Patterns**: Advanced reasoning-action loops for complex decision-making within workflow nodes
 - **Workflow Persistence**: Automatic checkpointing and state persistence to DynamoDB for fault tolerance and resume capabilities
@@ -39,14 +39,14 @@ The system uses **LangGraph StateGraph** for advanced workflow orchestration:
 - **Glue/Spark Scripts**: Generate via LLM when possible; store in `scripts/` or `glue_jobs/`. Integrate as LangGraph tools.
 - **Model Training**: Use SageMaker jobs through LangGraph training node. Local training is for prototyping only.
 - **State Management**: Use LangGraph built-in state persistence to DynamoDB with automatic checkpointing and versioning.
-- **LLM Model Selection**: Use GPT-5-mini for both complex reasoning and routine tasks (latest, most cost-effective, high-performance model for all operations).
+- **LLM Model Selection**: Use **GPT-4o-mini** for ReAct agents and LangChain workflows with intelligent tool integration and dynamic decision-making.
 - **Workflow Patterns**: Define workflows using LangGraph StateGraph. Use conditional edges for dynamic routing. Implement proper error handling and retry logic.
 
 ## Integration Points & Patterns
 - **Alpha Vantage API**: Use official client or REST calls; wrap as LangGraph tools for ingestion nodes.
 - **AWS Services**: Prefer SDK calls over CLI. For ETL, use Glue jobs; for streaming, use Kinesis. All integrated as LangGraph tools.
 - **LangGraph**: Primary framework for workflow orchestration, state management, and agent coordination.
-- **LLM Integration**: Configure ChatOpenAI with GPT-5-mini for ReAct agents and intelligent workflow routing.
+- **LLM Integration**: Configure ChatOpenAI with **GPT-4o-mini** for ReAct agents and intelligent workflow routing.
 - **State Flow**: Use LangGraph StateGraph for workflow execution with automatic persistence and conditional routing.
 
 ## Key Files & Directories
@@ -61,7 +61,7 @@ The system uses **LangGraph StateGraph** for advanced workflow orchestration:
 - `notebooks/`: Exploratory analysis.
 
 ## Example Patterns
-- LangGraph workflow with GPT-5-mini integration:
+- LangGraph workflow with GPT-4o-mini ReAct agents:
   ```python
   from langgraph.graph import StateGraph, END
   from langgraph.prebuilt import create_react_agent
@@ -77,16 +77,19 @@ The system uses **LangGraph StateGraph** for advanced workflow orchestration:
   # Create LangGraph workflow
   workflow = StateGraph(WorkflowState)
   
-  # Add nodes
+  # GPT-4o-mini for ReAct agents with tool integration
+  llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+  
+  # Add nodes with ReAct agent integration
   workflow.add_node("ingestion", data_ingestion_node)
   workflow.add_node("preprocessing", preprocessing_node)
   workflow.add_node("training", training_node)
   
-  # Add edges with GPT-5-mini powered routing
+  # Add edges with GPT-4o-mini powered routing
   workflow.add_conditional_edges("ingestion", route_next_step)
   workflow.add_edge("preprocessing", "training")
   
-  # Compile with GPT-5-mini for intelligent routing
+  # Compile with GPT-4o-mini for intelligent routing
   app = workflow.compile()
   ```
 - Message structure:

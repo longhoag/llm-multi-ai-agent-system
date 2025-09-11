@@ -7,7 +7,6 @@ from loguru import logger
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_react_agent, AgentExecutor
 from langchain import hub
-from langgraph.prebuilt import create_react_agent as langgraph_create_react_agent
 
 from src.state.workflow_state import (
     StockPredictionWorkflowState, 
@@ -26,7 +25,7 @@ def data_ingestion_node(state: StockPredictionWorkflowState) -> StockPredictionW
     """
     LangGraph node for data ingestion using Alpha Vantage API and S3 storage.
     
-    Uses GPT-5-mini with ReAct pattern and specialized tools for:
+    Uses GPT-4o-mini with ReAct pattern and specialized tools for:
     - Fetching stock data from Alpha Vantage
     - Validating data quality
     - Storing data in S3
@@ -49,8 +48,7 @@ def data_ingestion_node(state: StockPredictionWorkflowState) -> StockPredictionW
         )
         
         # Create GPT-4o-mini ReAct agent with data ingestion tools
-        # Using gpt-4o-mini for ReAct agent compatibility (gpt-5-mini doesn't support 'stop' parameter)
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=1.0)
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
         prompt = hub.pull("hwchase17/react")
         agent = create_react_agent(llm, DATA_INGESTION_TOOLS, prompt)
         agent_executor = AgentExecutor(
@@ -124,7 +122,7 @@ def preprocessing_node(state: StockPredictionWorkflowState) -> StockPredictionWo
     """
     LangGraph node for data preprocessing and feature engineering.
     
-    Uses GPT-5-mini to analyze data and create features for model training.
+    Uses GPT-4o-mini to analyze data and create features for model training.
     """
     logger.info(f"Starting preprocessing node for workflow {state['workflow_id']}")
     
@@ -139,8 +137,8 @@ def preprocessing_node(state: StockPredictionWorkflowState) -> StockPredictionWo
             state, "preprocessing", {"status": WorkflowStatus.RUNNING}
         )
         
-        # Create GPT-5-mini ReAct agent with preprocessing tools
-        llm = ChatOpenAI(model="gpt-5-mini", temperature=1.0)
+        # Create GPT-4o-mini ReAct agent with preprocessing tools
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
         agent = create_react_agent(llm, PREPROCESSING_TOOLS)
         
         # Get input data from ingestion
