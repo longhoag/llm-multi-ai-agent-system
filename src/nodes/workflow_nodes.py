@@ -205,7 +205,7 @@ def training_node(state: StockPredictionWorkflowState) -> StockPredictionWorkflo
     """
     LangGraph node for model training using SageMaker.
     
-    Uses GPT-5-mini to select appropriate algorithms and hyperparameters.
+    Uses GPT-4o-mini to select appropriate algorithms and hyperparameters.
     """
     logger.info(f"Starting training node for workflow {state['workflow_id']}")
     
@@ -220,8 +220,8 @@ def training_node(state: StockPredictionWorkflowState) -> StockPredictionWorkflo
             state, "training", {"status": WorkflowStatus.RUNNING}
         )
         
-        # Create GPT-5-mini ReAct agent with training tools
-        llm = ChatOpenAI(model="gpt-5-mini", temperature=1.0)
+        # Create GPT-4o-mini ReAct agent with training tools
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
         agent = create_react_agent(llm, TRAINING_TOOLS)
         
         # Get input data from preprocessing
