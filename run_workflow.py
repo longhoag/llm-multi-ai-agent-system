@@ -18,6 +18,11 @@ import sys
 import asyncio
 from pathlib import Path
 from datetime import datetime
+from typing import List
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add src to Python path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -64,45 +69,45 @@ def create_workflow():
     # Define workflow
     workflow = StateGraph(dict)
     
-    # Add nodes
-    workflow.add_node("ingestion", data_ingestion_node)
-    workflow.add_node("preprocessing", preprocessing_node)
-    workflow.add_node("training", training_node)
+    # Add nodes with unique names that don't conflict with state keys
+    workflow.add_node("data_ingestion", data_ingestion_node)
+    workflow.add_node("data_preprocessing", preprocessing_node)
+    workflow.add_node("model_training", training_node)
     
     # Define routing logic
     def route_after_ingestion(state):
         ingestion_status = state.get("ingestion", {}).get("status")
         if ingestion_status == WorkflowStatus.COMPLETED:
-            return "preprocessing"
+            return "data_preprocessing"
         return END
     
     def route_after_preprocessing(state):
         preprocessing_status = state.get("preprocessing", {}).get("status")
         if preprocessing_status == WorkflowStatus.COMPLETED:
-            return "training"
+            return "model_training"
         return END
     
     # Add edges
     workflow.add_conditional_edges(
-        "ingestion",
+        "data_ingestion",
         route_after_ingestion,
         {
-            "preprocessing": "preprocessing",
+            "data_preprocessing": "data_preprocessing",
             END: END
         }
     )
     
     workflow.add_conditional_edges(
-        "preprocessing", 
+        "data_preprocessing", 
         route_after_preprocessing,
         {
-            "training": "training",
+            "model_training": "model_training",
             END: END
         }
     )
     
-    workflow.add_edge("training", END)
-    workflow.set_entry_point("ingestion")
+    workflow.add_edge("model_training", END)
+    workflow.set_entry_point("data_ingestion")
     
     # Compile with memory
     memory = MemorySaver()
