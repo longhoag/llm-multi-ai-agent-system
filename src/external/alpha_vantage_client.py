@@ -48,6 +48,15 @@ class AlphaVantageClient:
                         logger.warning(f"Alpha Vantage API note: {data['Note']}")
                         return None
                     
+                    # Check for rate limit information
+                    if "Information" in data:
+                        if "rate limit" in data["Information"].lower():
+                            logger.error(f"Alpha Vantage API rate limit: {data['Information']}")
+                            return None
+                        else:
+                            logger.warning(f"Alpha Vantage API info: {data['Information']}")
+                            return None
+                    
                     return data
                 else:
                     logger.error(f"HTTP error {response.status}: {await response.text()}")

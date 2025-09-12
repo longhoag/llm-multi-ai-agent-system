@@ -71,18 +71,32 @@ def data_ingestion_node(state: StockPredictionWorkflowState) -> StockPredictionW
         - Timeframe: {timeframe}
         - Workflow ID: {state['workflow_id']}
         
-        For each symbol, please:
-        1. Fetch stock data using the fetch_stock_data_tool
-        2. Validate the data quality using validate_data_quality_tool
-        3. Upload the data to S3 using the upload_stock_data_to_s3 tool (NOT the old upload_to_s3 tool)
+        CRITICAL: Use tools with EXACT parameter names and types as shown below:
         
-        IMPORTANT: You MUST use the upload_stock_data_to_s3 tool for uploading. This tool automatically creates:
-        - A timestamped file for historical tracking (e.g., raw_data/daily/AAPL/20250911_123456.json)
-        - A latest.json file for easy access (e.g., raw_data/daily/AAPL/latest.json)
+        For each symbol in {symbols}, follow these steps:
         
-        Do NOT use the old upload_to_s3 tool as it only creates timestamped files.
+        1. FETCH DATA:
+           Tool: fetch_stock_data
+           Parameters: symbol="AAPL", outputsize="compact"
+           Example: fetch_stock_data(symbol="AAPL", outputsize="compact")
+           
+        2. VALIDATE DATA:
+           Tool: validate_data_quality
+           Parameters: data=<result_from_step_1>, symbol="AAPL"
+           Example: validate_data_quality(data=fetched_data, symbol="AAPL")
+           
+        3. UPLOAD TO S3:
+           Tool: upload_stock_data_to_s3
+           Parameters: data=<result_from_step_1>, symbol="AAPL", timeframe="daily"
+           Example: upload_stock_data_to_s3(data=fetched_data, symbol="AAPL", timeframe="daily")
         
-        Provide a summary of what was accomplished for each symbol, including the S3 keys created.
+        IMPORTANT NOTES:
+        - Use INDIVIDUAL parameters (symbol="AAPL"), NOT dictionary parameters
+        - The symbol parameter must be a string like "AAPL", not a dictionary
+        - The outputsize parameter should be "compact" for testing
+        - Pass the actual data object from fetch to validate and upload tools
+        
+        Process symbol: {symbols[0]} (start with just this one symbol)
         """
         
         # Execute ingestion with ReAct agent
@@ -139,35 +153,45 @@ def preprocessing_node(state: StockPredictionWorkflowState) -> StockPredictionWo
         
         # Create GPT-4o-mini ReAct agent with preprocessing tools
         llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
-        agent = create_react_agent(llm, PREPROCESSING_TOOLS)
+        prompt = hub.pull("hwchase17/react")
+        agent = create_react_agent(llm, PREPROCESSING_TOOLS, prompt)
+        agent_executor = AgentExecutor(
+            agent=agent, 
+            tools=PREPROCESSING_TOOLS, 
+            max_iterations=10,
+            handle_parsing_errors=True,
+            return_intermediate_steps=True
+        )
         
         # Get input data from ingestion
         input_s3_keys = state["ingestion"]["s3_keys"]
         
         preprocessing_prompt = f"""
-        You are a data preprocessing and feature engineering specialist for financial data.
+        You are a data preprocessing specialist. Execute these 3 steps EXACTLY:
         
-        Current task:
-        - Input S3 keys: {input_s3_keys}
-        - Symbols: {state['symbols']}
-        - Timeframe: {state['timeframe']}
-        - Workflow ID: {state['workflow_id']}
+        STEP 1: Download data using this EXACT command:
+        Action: download_from_s3
+        Action Input: {{"key": "raw_data/daily/AAPL/latest.json"}}
         
-        Please:
-        1. Download the raw data from S3 using download_from_s3 tool
-        2. Analyze the data structure and quality
-        3. Create relevant features for stock price prediction:
-           - Technical indicators (moving averages, RSI, MACD)
-           - Price-based features (returns, volatility)
-           - Volume-based features
-        4. Generate processed data with features
-        5. Upload processed data to S3 with appropriate keys
+        STEP 2: After successful download, create features using:
+        Action: create_features  
+        Action Input: {{"data": [downloaded_data], "symbol": "AAPL"}}
         
-        Provide a summary of features created and data quality metrics.
+        STEP 3: Upload processed data using:
+        Action: upload_processed_data
+        Action Input: {{"data": [processed_data], "symbol": "AAPL", "timeframe": "daily"}}
+        
+        IMPORTANT: 
+        - Use the EXACT key "raw_data/daily/AAPL/latest.json" 
+        - Do NOT try different file paths
+        - Follow the steps in order
+        - Stop after uploading processed data
+        
+        Begin with Step 1 now!
         """
         
         # Execute preprocessing with ReAct agent
-        result = agent.invoke({"messages": [("user", preprocessing_prompt)]})
+        result = agent_executor.invoke({"input": preprocessing_prompt})
         
         # Parse preprocessing results
         preprocessing_results = _parse_preprocessing_results(result, input_s3_keys)

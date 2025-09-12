@@ -38,12 +38,20 @@ class S3Manager:
     async def download_json(self, key: str) -> Optional[Dict[str, Any]]:
         """Download JSON data from S3"""
         try:
+            logger.info(f"🔍 Attempting to download S3 key: {key} from bucket: {self.bucket_name}")
             response = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
             content = response["Body"].read().decode("utf-8")
             data = json.loads(content)
             logger.info(f"JSON downloaded from S3: s3://{self.bucket_name}/{key}")
             return data
-        except (ClientError, NoCredentialsError, json.JSONDecodeError) as e:
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == 'NoSuchKey':
+                logger.error(f"❌ S3 Key NOT FOUND: '{key}' in bucket '{self.bucket_name}'")
+            else:
+                logger.error(f"❌ S3 ClientError ({error_code}): {e}")
+            return None
+        except (NoCredentialsError, json.JSONDecodeError) as e:
             logger.error(f"Failed to download JSON from S3: {e}")
             return None
     
