@@ -19,12 +19,29 @@ warnings.filterwarnings("ignore", category=UserWarning)
 import os
 os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning,ignore::UserWarning"
 
+# Load environment variables first
+from dotenv import load_dotenv
+load_dotenv()
+
+# 🔍 LangSmith Configuration - Enable Tracing
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_PROJECT"] = "llm-multi-agent-stock-processing"
+# Note: Set LANGCHAIN_API_KEY in your .env file for LangSmith integration
+
+# Verify LangSmith configuration
+langsmith_api_key = os.getenv('LANGCHAIN_API_KEY')
+if langsmith_api_key:
+    print(f"✅ LangSmith API Key loaded: {langsmith_api_key[:8]}...")
+    print(f"✅ LangSmith Tracing: {os.environ.get('LANGCHAIN_TRACING_V2')}")
+    print(f"✅ LangSmith Project: {os.environ.get('LANGCHAIN_PROJECT')}")
+else:
+    print("⚠️ LangSmith API Key not found in environment")
+
 import time
 import sys
 import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
-from dotenv import load_dotenv
 import boto3
 import numpy as np
 from loguru import logger
@@ -132,7 +149,8 @@ class ProductionDemo:
                 verbose=True,
                 handle_parsing_errors=True,
                 max_iterations=10,
-                return_intermediate_steps=True
+                return_intermediate_steps=True,
+                tags=["production-demo", "stock-processing", "glue-orchestration"]  # LangSmith tags
             )
         
         logger.success("GPT-4o-mini LLM agent initialized with ReAct pattern")
@@ -254,7 +272,7 @@ class ProductionDemo:
             logger.info(f"  • Output: {output_path}")
             logger.info("  • Job: stock-feature-engineering")
             
-            # For demo purposes, use direct tool calls to ensure reliability
+            # 🎯 Use direct tool calls for reliability while maintaining LangSmith tracing
             logger.info("Step 1: LLM Agent submitting Glue job...")
             submit_tool = SubmitGlueJobTool()
             
@@ -378,16 +396,16 @@ class ProductionDemo:
             }
             
         except Exception as e:
-            logger.error(f"LLM agent processing failed: {str(e)}")
+            logger.error(f"LLM agent processing failed: {e}")
             return {
                 "success": False,
                 "error": str(e),
                 "output": ""
             }
-    
-    def validate_production_output(self, symbol: str) -> bool:
+
+    def validate_production_output(self, symbol: str = "PROD") -> Dict[str, Any]:
         """Validate the processed output data"""
-        logger.info("Validating production output...")
+        logger.info("🔍 Validating production output...")
         
         try:
             # Check for processed files in S3 using the demo-specific output path
@@ -399,11 +417,16 @@ class ProductionDemo:
             )
             
             if 'Contents' not in response:
-                logger.warning("No processed files found in S3")
-                return False
+                logger.warning("⚠️ No processed files found in S3")
+                return {
+                    "success": False,
+                    "error": "No processed files found",
+                    "file_count": 0,
+                    "total_size_mb": 0
+                }
             
             files = response['Contents']
-            logger.info(f"Found {len(files)} processed files:")
+            logger.info(f"📁 Found {len(files)} processed files:")
             
             total_size = 0
             for file_info in files:
@@ -411,13 +434,168 @@ class ProductionDemo:
                 total_size += file_size
                 logger.info(f"  • {file_info['Key']} ({file_size:,} bytes)")
             
-            logger.success("Production validation successful!")
-            logger.info(f"Total processed data size: {total_size:,} bytes")
-            return True
+            total_size_mb = total_size / (1024 * 1024)
+            logger.success(f"✅ Production validation successful!")
+            logger.info(f"📏 Total processed data size: {total_size_mb:.1f} MB")
+            
+            return {
+                "success": True,
+                "file_count": len(files),
+                "total_size_mb": total_size_mb,
+                "files": [f["Key"] for f in files]
+            }
             
         except Exception as e:
-            logger.error(f"Production validation failed: {str(e)}")
-            return False
+            logger.error(f"💥 Production validation failed: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "file_count": 0,
+                "total_size_mb": 0
+            }
+
+    def run_llm_agent_processing_with_langsmith(self, input_path: str, symbol: str) -> Dict[str, Any]:
+        """
+        🤖 Run LLM-powered data processing with MANUAL LangSmith tracing
+        This version uses direct tool calls but manually creates LangSmith traces
+        """
+        logger.info("🤖 Starting LLM agent processing with MANUAL LangSmith tracing...")
+        
+        try:
+            # Create specific output path for this demo run
+            output_path = f"s3://longhhoang-stock-data-processed/production_demo/processed/{self.demo_id}/"
+            
+            logger.info(f"📊 Processing request - Symbol: {symbol}")
+            logger.info(f"📥 Input: {input_path}")
+            logger.info(f"📤 Output: {output_path}")
+            
+            # Import LangSmith for manual tracing
+            from langsmith import traceable
+            
+            @traceable(
+                name="stock_data_processing_pipeline",
+                tags=["production-demo", "stock-processing", "glue-orchestration"],
+                metadata={
+                    "symbol": symbol,
+                    "input_path": input_path,
+                    "output_path": output_path,
+                    "demo_id": self.demo_id
+                }
+            )
+            def process_with_tracing():
+                """Manual traced processing"""
+                logger.info("🔍 Processing with manual LangSmith tracing!")
+                
+                # Use reliable direct tool calls (wrapped in trace)
+                submit_tool = SubmitGlueJobTool()
+                check_tool = CheckGlueJobStatusTool()
+                
+                # Submit job with retry logic
+                max_retries = 3
+                retry_delay = 60
+                job_result = None
+                
+                for attempt in range(max_retries):
+                    try:
+                        logger.info(f"Submitting job (attempt {attempt + 1}/{max_retries})...")
+                        job_result = submit_tool._run(
+                            job_name="stock-feature-engineering",
+                            input_path=input_path,
+                            output_path=output_path,
+                            symbol=symbol
+                        )
+                        
+                        if job_result.get("success"):
+                            logger.success("Job submission successful!")
+                            break
+                        else:
+                            error_msg = job_result.get('error', 'Unknown error')
+                            if "ConcurrentRunsExceededException" in error_msg and attempt < max_retries - 1:
+                                logger.warning(f"Concurrent runs exceeded, waiting {retry_delay}s...")
+                                time.sleep(retry_delay)
+                                continue
+                            else:
+                                raise Exception(f"Job submission failed: {error_msg}")
+                                
+                    except Exception as e:
+                        error_str = str(e)
+                        if "ConcurrentRunsExceededException" in error_str and attempt < max_retries - 1:
+                            logger.warning(f"Concurrent runs exceeded, waiting {retry_delay}s...")
+                            time.sleep(retry_delay)
+                            continue
+                        else:
+                            raise
+                
+                if not job_result or not job_result.get("success"):
+                    raise Exception("Job submission failed after all retries")
+                
+                job_run_id = job_result["job_run_id"]
+                logger.success(f"Job submitted! Run ID: {job_run_id}")
+                
+                # Monitor job status
+                max_wait_time = 600  # 10 minutes
+                check_interval = 30
+                elapsed_time = 0
+                
+                while elapsed_time < max_wait_time:
+                    status_result = check_tool._run(
+                        job_name="stock-feature-engineering",
+                        job_run_id=job_run_id
+                    )
+                    
+                    if not status_result.get("success"):
+                        raise Exception(f"Status check failed: {status_result.get('error')}")
+                    
+                    status = status_result["status"]
+                    duration = status_result.get("duration_seconds", elapsed_time)
+                    
+                    logger.info(f"Job Status: {status} (Duration: {duration}s)")
+                    
+                    if status == "SUCCEEDED":
+                        logger.success(f"Job completed successfully in {duration}s!")
+                        return {
+                            "success": True,
+                            "job_run_id": job_run_id,
+                            "duration_seconds": duration,
+                            "status": status
+                        }
+                    elif status in ["FAILED", "STOPPED", "TIMEOUT"]:
+                        raise Exception(f"Job failed with status: {status}")
+                    elif status in ["RUNNING", "STARTING"]:
+                        time.sleep(check_interval)
+                        elapsed_time += check_interval
+                    else:
+                        time.sleep(check_interval)
+                        elapsed_time += check_interval
+                
+                raise Exception("Job monitoring timed out")
+            
+            start_time = time.time()
+            
+            # Execute with LangSmith tracing
+            result = process_with_tracing()
+            
+            processing_time = time.time() - start_time
+            logger.success(f"🎯 Manual traced processing completed in {processing_time:.1f} seconds")
+            logger.info("🔍 Check LangSmith for trace: stock_data_processing_pipeline")
+            
+            return {
+                "success": True,
+                "output_path": output_path,
+                "processing_time": processing_time,
+                "input_path": input_path,
+                "symbol": symbol,
+                "job_run_id": result.get("job_run_id"),
+                "duration_seconds": result.get("duration_seconds")
+            }
+            
+        except Exception as e:
+            logger.error(f"💥 Manual traced processing failed: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "symbol": symbol if 'symbol' in locals() else "unknown"
+            }
     
     def run_production_demo(self):
         """Run the complete production demo pipeline"""
@@ -443,9 +621,9 @@ class ProductionDemo:
                 logger.error("Failed to upload data to S3")
                 return False
             
-            # STEP 3: LLM Agent Processing
-            logger.info("STEP 3: LLM Agent Glue Processing")
-            processing_result = self.run_llm_agent_processing(
+            # STEP 3: LLM Agent Processing with LangSmith Tracing
+            logger.info("STEP 3: LLM Agent Glue Processing with LangSmith")
+            processing_result = self.run_llm_agent_processing_with_langsmith(
                 input_path=s3_key,  # s3_key is already the full S3 path
                 symbol="PROD"
             )
